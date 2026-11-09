@@ -1,0 +1,19 @@
+# Secretos
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Datos generados en ejecución (los de ejemplo sí se versionan)
+data/tienda.db
+data/cuentos/*
+!data/cuentos/.gitkeep
+
+# Sistema
+.DS_Store
+.vscode/
+.idea/
