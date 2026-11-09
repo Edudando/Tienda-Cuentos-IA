@@ -1,0 +1,1 @@
+"""Tienda de Cuentos IA - backend (FastAPI + lógica de negocio)."""
