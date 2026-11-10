@@ -1,8 +1,12 @@
 """Cliente de IA con fallback entre proveedores gratuitos.
 
-Orden por defecto (variable IA_PROVEEDORES): gemini -> groq -> ollama.
-Si un proveedor falla por cuota (HTTP 429), error del servidor, timeout o
-falta de clave, se pasa al siguiente y se registra cuál respondió.
+Orden por defecto (variable IA_PROVEEDORES): gemini -> groq.
+Si un proveedor falla por cuota (HTTP 429), error del servidor, timeout,
+respuesta sin texto o falta de clave, se pasa al siguiente y se registra
+cuál respondió.
+
+Ollama (modelo local) se descartó: las computadoras del grupo no tienen
+potencia suficiente para correrlo (ver docs/bitacora_ia.md).
 
 El proveedor "mock" es una simulación determinística, sin IA real. Sirve
 para correr los tests y para demostrar el sistema sin internet. Siempre
@@ -74,23 +78,10 @@ def _groq(prompt: str, sistema: str, json_mode: bool) -> str:
         timeout=config.ia_timeout,
     )
     _verificar_http(r, "groq")
-    return r.json()["choices"][0]["message"]["content"]
-
-
-def _ollama(prompt: str, sistema: str, json_mode: bool) -> str:
-    cuerpo: dict[str, Any] = {
-        "model": config.ollama_model,
-        "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": prompt}],
-        "stream": False,
-    }
-    if json_mode:
-        cuerpo["format"] = "json"
     try:
-        r = httpx.post(f"{config.ollama_url}/api/chat", json=cuerpo, timeout=config.ia_timeout * 3)
-    except httpx.ConnectError as exc:
-        raise ProveedorNoDisponible("Ollama no está corriendo") from exc
-    _verificar_http(r, "ollama")
-    return r.json()["message"]["content"]
+        return r.json()["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:  # respuesta con otro formato
+        raise ProveedorNoDisponible(f"groq devolvió una respuesta sin texto: {r.text[:200]}") from exc
 
 
 def _verificar_http(r: httpx.Response, nombre: str) -> None:
@@ -147,7 +138,7 @@ def _mock(prompt: str, sistema: str, json_mode: bool, tarea: str, contexto: dict
 
 
 # -------------------------------------------------------------- orquestador
-_PROVEEDORES = {"gemini": _gemini, "groq": _groq, "ollama": _ollama}
+_PROVEEDORES = {"gemini": _gemini, "groq": _groq}
 
 
 def generar_texto(
