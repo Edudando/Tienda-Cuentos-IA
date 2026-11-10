@@ -1,0 +1,18 @@
+[
+  {
+    "archivo_ejemplo": "luna-y-el-farol.md",
+    "tema": "un farol de plaza que tiene miedo de apagarse",
+    "edad": 5,
+    "valores": "la solidaridad entre vecinos",
+    "precio": 0,
+    "promo": "Un farol cansado, una nena con una linterna y un barrio que se une para que la noche dé menos miedo. Ideal para leer antes de dormir con chicos de 5 años. Pedilo gratis con el botón de abajo."
+  },
+  {
+    "archivo_ejemplo": "el-robot-que-coleccionaba-preguntas.md",
+    "tema": "un robot de biblioteca que junta preguntas sin respuesta",
+    "edad": 8,
+    "valores": "la curiosidad y el aprendizaje",
+    "precio": 1500,
+    "promo": "Tito es un robot que se avergonzaba de no saber todo, hasta que descubrió que cada pregunta es una puerta. Un cuento sobre la curiosidad para chicos de 8 años. Pedilo con el botón de abajo."
+  }
+]   
