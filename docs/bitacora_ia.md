@@ -22,15 +22,18 @@ Esta bitácora registra cómo el equipo usó herramientas de IA para desarrollar
 | 10/11/2026 | Pablo (Scuuz) | Claude | Preparar el entorno y correr la API con IA simulada | Entorno virtual con Python 3.12.4 (el grupo reportó problemas con 3.13); tests en verde con IA_PROVEEDORES=mock |
 | 10/11/2026 | Pablo (Scuuz) | Claude | Evaluar Ollama como respaldo local | Se descartó: las PCs del grupo no tienen potencia para correr un modelo local. El fallback queda Gemini → Groq |
 | 10/11/2026 | Pablo (Scuuz) | Claude | Consultar límites gratuitos de Gemini y Groq | Gemini Flash permite 20 pedidos/día: se cambia a Flash Lite (500/día). Pro no está en el nivel gratuito |
+| 10/11/2026 | Pablo (Scuuz) | Claude | Prueba de generación con Gemini real: tortuga, 7 años | La promo inventó un personaje ("Bruno", cuando la protagonista era Clementina) y salió cortada ("Pedilo toc"), y aun así el cuento era aprobable. Ver "Dificultades y correcciones" |
+| 10/11/2026 | Pablo (Scuuz) | Claude | Corregir la promo | Se pasa el cuento completo al prompt de la promo con la instrucción de no inventar; se unen todas las partes de la respuesta de Gemini; nueva regla bloqueante `promo_completa` con su test |
+| 10/11/2026 | Pablo (Scuuz) | Claude | Quitar Ollama del código y blindar Groq | Se eliminó el proveedor Ollama de `ia.py`, `config.py` y `.env.example`; el modelo por defecto pasa a `gemini-flash-lite-latest`; si Groq responde sin texto se pasa al siguiente proveedor en lugar de fallar (test nuevo) |
 
 ## Límites del nivel gratuito (consultados el 10/11/2026)
 
-| Proveedor | Modelo 			| Pedidos/min | Pedidos/día | Tokens/min | Tokens/día |
-|-----------| ------------------------- | ----------- | ----------- | -----------| ---------- |
-|   Gemini  | Flash (3 / 3.6 / 3.8, 2.5)|      5      |     20      |    250K    |     —      |
-|   Gemini  | Flash Lite (3.1 / 3.5)    |      15     |     500     |    250K    |     —      |
-|   Gemini  | Pro (2.5 / 3.1)           |      0      |     0       |    0       |     —      |
-|    Groq   | openai/gpt-oss-120b       |      30     |     1.000   |    8K      |    200K    |
+| Proveedor | Modelo | Pedidos/min | Pedidos/día | Tokens/min | Tokens/día |
+| --- | --- | --- | --- | --- | --- |
+| Gemini | Flash (3 / 3.6 / 3.8, 2.5) | 5 | 20 | 250K | — |
+| Gemini | Flash Lite (3.1 / 3.5) | 15 | 500 | 250K | — |
+| Gemini | Pro (2.5 / 3.1) | 0 | 0 | 0 | — |
+| Groq | openai/gpt-oss-120b | 30 | 1.000 | 8K | 200K |
 
 **Decisión:** se usa Gemini Flash Lite como principal en lugar de Flash. Flash permite solo
 20 pedidos por día, y cada cuento consume 2 o 3 (cuento, reintento y promoción), lo que no
@@ -45,4 +48,51 @@ El relay de long polling se agregó porque el disparador de Telegram en n8n requ
 
 ## Dificultades y correcciones
 
-*(Completar durante el desarrollo: errores que propuso la IA, cómo los detectaron y qué cambiaron.)*
+### La promoción inventaba personajes y salía cortada (10/11/2026)
+
+**Qué pasó.** Al generar un cuento con `{"tema": "una tortuga que quería ganar una carrera", "edad": 7, "valores": "la paciencia"}`, el cuento era correcto (protagonista Clementina, 437 palabras, todas las reglas en verde), pero la promoción hablaba de un tal "Bruno" que no existía en el cuento y terminaba a mitad de palabra: "…Pedilo toc". Aun así el producto salió `aprobable: true`.
+
+**Cómo se detectó.** Leyendo la respuesta de `POST /productos/generar` durante las pruebas con Gemini real: las reglas daban todo bien, pero al comparar la promo con el cuento no coincidían.
+
+**Causas.**
+
+| Problema | Causa | Archivo |
+| --- | --- | --- |
+| Inventaba personajes | La promo se pedía sin enviar el cuento: la IA solo recibía título, edad y tema | `app/servicios/productos.py` |
+| Salía cortada | Gemini puede devolver el texto dividido en varias partes y el código leía solo la primera (`parts[0]`) | `app/ia.py` |
+| Se podía aprobar igual | Ninguna regla verificaba que la promo estuviera completa | `app/validaciones.py` |
+
+**Corrección.** El prompt de la promo ahora incluye el cuento completo y pide usar solo personajes y hechos que aparecen en él, sin contar el final. El cliente de Gemini une todas las partes de la respuesta. Se agregó la regla bloqueante `promo_completa` (la promo no puede terminar en letra o número) con su prueba automática.
+
+**Resultado.** Repitiendo la misma prueba, la promo habló de la protagonista real (Donata) y de personajes del cuento, terminó completa y la regla nueva dio `ok`. Se confirmó con un segundo cuento (robot Bolt, 10 años).
+
+**Aprendizaje.** Que todas las reglas den bien no garantiza que el texto sea correcto: la IA puede inventar datos que ninguna regla automática detecta. Por eso el sistema exige aprobación humana antes de publicar.
+
+### Errores que las reglas no detectan
+
+En las pruebas aparecieron errores que solo se ven leyendo el cuento: faltas de ortografía ("enroles", "habìa", "luceces"), incoherencias (un personaje que "se despierta" sin haberse dormido), escenas que quedan sueltas y una historia que repite la fábula de "La liebre y la tortuga" con otros nombres. Son casos para la revisión humana del panel; como mejora del prompt queda pedir historias originales y revisar la ortografía.
+
+## Pruebas con IA real (10/11/2026)
+
+Proveedor: Gemini Flash Lite. Pedido = tema, edad y personaje.
+
+### Antes de corregir la promo
+
+| # | Pedido | Proveedor | Reglas | Aprobable | ¿Promo coherente? | ¿Promo completa? | Observaciones del cuento |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Nube, 4 años, Nubi | gemini | todas ok | sí | no revisado | no revisado | |
+| 2 | Dragón, 6 años, Tomi | gemini | todas ok | sí | no revisado | no revisado | |
+| 3 | Tortuga, 7 años | gemini | todas ok | sí | NO: inventó a "Bruno" (la tortuga es Clementina) | NO: termina en "Pedilo toc" | "enroles" en vez de "enrolles"; "habìa" con acento mal |
+
+### Después de corregir la promo
+
+| # | Pedido | Proveedor | Reglas | Aprobable | ¿Promo coherente? | ¿Promo completa? | Observaciones del cuento |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 | Tortuga, 7 años | gemini | todas ok, incluida promo_completa | sí | SÍ: Donata, Crispín, conejo y ardilla están en el cuento | SÍ: termina en emoji | "El conejo y la ardilla se despertaron", pero la ardilla nunca se durmió; repite "La liebre y la tortuga"; título igual al de la prueba 3 |
+| 5 | Robot, 10 años, Bolt | gemini | todas ok, incluida promo_completa | sí | SÍ: Bolt, Julián, Sofía y Lucas están en el cuento | SÍ: termina en punto | "luceces" en vez de "luces"; "pelota risueña" no tiene sentido; la escena de la pelota bajo el gomero queda suelta |
+
+### Mejoras pendientes para los prompts
+
+- Pedir que la historia sea original y no una versión de fábulas conocidas.
+- Evitar títulos repetidos.
+- Pedir revisión de ortografía y que no queden escenas sin cerrar.
