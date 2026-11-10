@@ -33,7 +33,7 @@ def test_config_usa_valores_por_defecto(monkeypatch):
     monkeypatch.delenv("IA_PROVEEDORES", raising=False)
     monkeypatch.delenv("GROQ_MODEL", raising=False)
     cfg = Config()
-    assert cfg.ia_proveedores == ["gemini", "groq", "ollama"]
+    assert cfg.ia_proveedores == ["gemini", "groq"]
     assert cfg.groq_model == "openai/gpt-oss-120b"
 
 
