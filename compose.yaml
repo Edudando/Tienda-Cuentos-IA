@@ -1,0 +1,102 @@
+# Tienda de Cuentos IA - orquestación de servicios con Docker Compose
+#
+# Uso (desde la carpeta del proyecto):
+#   copy .env.example .env      # una sola vez, y completar las claves
+#   docker compose up -d --build
+#   docker compose ps
+#   docker compose down         # detiene todo SIN borrar datos
+#
+# Direcciones:
+#   Desde Windows (navegador): http://localhost:8000/docs | :8501 | :5678
+#   Entre contenedores:        http://api:8000 | http://ui:8501 | http://n8n:5678
+
+name: tienda-cuentos
+
+services:
+
+  # ---------------------------------------------------------------- API
+  # Único servicio con lógica de negocio y ÚNICO que toca SQLite.
+  api:
+    build: .
+    image: tienda-cuentos:local
+    # SUPUESTO: app/main.py define la variable "app" (Integrante 1).
+    # Un solo proceso: SQLite no tolera bien escrituras desde varios procesos.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      # Base de datos y cuentos .md quedan en la carpeta data/ del proyecto
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      # Permite llegar a Ollama, que corre en Windows fuera de Docker
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      # La imagen python:slim no trae curl: se usa Python para consultar /salud
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/salud', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks: [tienda]
+
+  # ---------------------------------------------------------- Panel web
+  # Solo muestra datos y llama a la API. No monta data/ ni recibe claves.
+  ui:
+    image: tienda-cuentos:local
+    # SUPUESTO: el archivo principal del panel es ui/app.py.
+    command: streamlit run ui/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+    environment:
+      # PROPUESTA: nombre de la variable que el panel usa para encontrar la API
+      API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [tienda]
+
+  # -------------------------------------------------------- Automatización
+  n8n:
+    # Fijar a la versión con la que el Integrante 3 exportó los workflows
+    # (se consulta con: docker compose exec n8n n8n --version).
+    image: docker.n8n.io/n8nio/n8n:latest
+    environment:
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Argentina/Buenos_Aires}
+      TZ: ${GENERIC_TIMEZONE:-America/Argentina/Buenos_Aires}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Falta N8N_ENCRYPTION_KEY en el archivo .env}
+    volumes:
+      # Credenciales, workflows activos e historial de ejecuciones
+      - n8n_data:/home/node/.n8n
+      # Workflows exportados del repo, para importarlos con "n8n import:workflow"
+      - ./n8n/workflows:/home/node/workflows
+    ports:
+      - "5678:5678"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [tienda]
+
+  # -------------------------------------------------------------- Relay
+  # Lee los mensajes del bot (long polling) y los reenvía al webhook de n8n.
+  # No expone puertos: nadie se conecta a él, él se conecta a los demás.
+  relay:
+    image: tienda-cuentos:local
+    # SUPUESTO: se ejecuta como módulo (Integrante 3).
+    command: python -m relay.main
+    env_file: .env
+    depends_on:
+      - n8n
+    restart: unless-stopped
+    networks: [tienda]
+
+networks:
+  tienda:
+
+volumes:
+  n8n_data:
