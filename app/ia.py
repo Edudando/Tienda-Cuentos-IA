@@ -49,7 +49,10 @@ def _gemini(prompt: str, sistema: str, json_mode: bool) -> str:
     r = httpx.post(url, params={"key": config.gemini_api_key}, json=cuerpo, timeout=config.ia_timeout)
     _verificar_http(r, "gemini")
     try:
-        return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+        partes = r.json()["candidates"][0]["content"]["parts"]
+        # Gemini puede dividir la respuesta en varias partes: se unen todas
+        # (y se ignoran las de "razonamiento" interno, marcadas con thought)
+        return "".join(p.get("text", "") for p in partes if not p.get("thought"))
     except (KeyError, IndexError) as exc:  # p. ej. respuesta bloqueada por filtros
         raise ProveedorNoDisponible(f"gemini devolvió una respuesta sin texto: {r.text[:200]}") from exc
 
