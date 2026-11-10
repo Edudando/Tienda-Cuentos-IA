@@ -127,3 +127,7 @@ def test_extraer_json_tolera_bloques_de_codigo():
     assert ia.extraer_json(texto) == {"intencion": "pedido", "producto_id": 3}
     with pytest.raises(ValueError):
         ia.extraer_json("no hay json acá")
+
+def test_promo_cortada_bloquea():
+    assert hay_bloqueos(validar_promo("Un cuento hermoso para leer en familia. Pedilo toc")) is True
+    assert hay_bloqueos(validar_promo("Un cuento hermoso para leer en familia. ¡Pedilo! 🐢")) is False
