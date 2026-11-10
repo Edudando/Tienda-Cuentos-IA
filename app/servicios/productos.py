@@ -77,9 +77,11 @@ def generar(datos: GenerarCuento) -> dict[str, Any]:
     titulo = extraer_titulo(contenido) or f"Cuento sobre {datos.tema}"
 
     promo_resp = ia.generar_texto(
+        f"Este es el cuento que tenés que promocionar:\n\n{contenido}\n\n"
         f"Escribí un texto de 2 o 3 oraciones para promocionar el cuento '{titulo}', "
-        f"pensado para chicos de {datos.edad} años, sobre {datos.tema}. "
-        "Terminá invitando a pedirlo con el botón de abajo.",
+        f"pensado para chicos de {datos.edad} años. "
+        "Usá SOLO los personajes, nombres y hechos que aparecen en el cuento; no inventes nada. "
+        "No cuentes el final. Terminá con una oración completa invitando a pedirlo con el botón de abajo.",
         SISTEMA_PROMO,
         tarea="promo",
         contexto={**contexto, "titulo": titulo},
