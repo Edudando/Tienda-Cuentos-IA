@@ -10,7 +10,7 @@ modificarlo entero. El proceso completo es responsabilidad de los cuatro.
 | 3 | [completar] | n8n, bot y canal de Telegram, relay | `n8n/workflows/`, `relay/main.py`, `app/telegram_client.py` |
 | 4 | [completar] | Panel Streamlit, Docker, documentación y presentación | `ui/`, `Dockerfile`, `compose.yaml`, `.env.example`, `README.md`, `docs/` |
 
-## Tareas cruzadas
+## Tareas cruzadas (quien hace estos puntos)
 
 | Integrante | Tarea sobre la parte de otro |
 |---|---|
