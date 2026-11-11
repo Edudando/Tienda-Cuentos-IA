@@ -127,3 +127,19 @@ def test_extraer_json_tolera_bloques_de_codigo():
     assert ia.extraer_json(texto) == {"intencion": "pedido", "producto_id": 3}
     with pytest.raises(ValueError):
         ia.extraer_json("no hay json acá")
+
+def test_promo_cortada_bloquea():
+    assert hay_bloqueos(validar_promo("Un cuento hermoso para leer en familia. Pedilo toc")) is True
+    assert hay_bloqueos(validar_promo("Un cuento hermoso para leer en familia. ¡Pedilo! 🐢")) is False
+
+
+def test_groq_sin_texto_pasa_al_siguiente(monkeypatch):
+    monkeypatch.setattr(config, "ia_proveedores", ["groq", "mock"])
+    monkeypatch.setattr(config, "groq_api_key", "clave-falsa")
+
+    def post_falso(url, **kwargs):
+        return httpx.Response(200, json={"error": "formato raro"}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(ia.httpx, "post", post_falso)
+    r = ia.generar_texto("p", "s", tarea="promo", contexto={})
+    assert r.proveedor == "mock"

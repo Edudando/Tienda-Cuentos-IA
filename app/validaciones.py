@@ -100,12 +100,20 @@ def validar_promo(promo: str | None) -> list[dict[str, Any]]:
         return [_regla("promo", False, "Falta el texto promocional")]
     prohibidas = _prohibidas_en(promo)
     largo_ok = len(promo) <= LARGO_MAX_PROMO
+    # si el último carácter es una letra o un número, la promo quedó cortada
+    # (una promo completa termina en punto, signo de exclamación/pregunta o emoji)
+    completa = not promo.rstrip()[-1].isalnum()
     return [
         _regla("promo_largo", largo_ok, f"{len(promo)} caracteres (máx. {LARGO_MAX_PROMO})"),
         _regla(
             "promo_vocabulario",
             not prohibidas,
             "Sin palabras prohibidas" if not prohibidas else f"Contiene: {', '.join(prohibidas)}",
+        ),
+        _regla(
+            "promo_completa",
+            completa,
+            "La promo termina bien" if completa else "La promo parece cortada (no termina en punto, signo o emoji)",
         ),
     ]
 

@@ -30,14 +30,12 @@ class Config:
 
     # --- IA: orden de proveedores para el fallback ---
     ia_proveedores: list[str] = field(
-        default_factory=lambda: _lista(os.getenv("IA_PROVEEDORES", "gemini,groq,ollama"))
+        default_factory=lambda: _lista(os.getenv("IA_PROVEEDORES", "gemini,groq"))
     )
     gemini_api_key: str = field(default_factory=lambda: os.getenv("GEMINI_API_KEY", ""))
-    gemini_model: str = field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-flash-latest"))
+    gemini_model: str = field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest"))
     groq_api_key: str = field(default_factory=lambda: os.getenv("GROQ_API_KEY", ""))
     groq_model: str = field(default_factory=lambda: os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"))
-    ollama_url: str = field(default_factory=lambda: os.getenv("OLLAMA_URL", "http://localhost:11434"))
-    ollama_model: str = field(default_factory=lambda: os.getenv("OLLAMA_MODEL", "llama3.2"))
     ia_timeout: float = field(default_factory=lambda: float(os.getenv("IA_TIMEOUT", "60")))
 
     # --- Telegram ---
