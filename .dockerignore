@@ -1,0 +1,32 @@
+# Lo que NO se copia a la imagen de Docker al construirla.
+# Las claves llegan por variables de entorno y los datos por un volumen,
+# así que nunca quedan guardados dentro de la imagen.
+
+# Secretos
+.env
+
+# Datos: se montan como volumen en tiempo de ejecución
+data/
+
+# Git y documentación
+.git/
+.gitignore
+.gitattributes
+docs/
+README.md
+
+# n8n tiene su propio contenedor; los workflows se montan como volumen
+n8n/
+
+# Python y entornos locales
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Editores y sistema
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

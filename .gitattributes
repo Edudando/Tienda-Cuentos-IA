@@ -1,0 +1,18 @@
+# Normaliza los saltos de línea: en el repositorio siempre LF.
+# Evita que Windows (CRLF) haga aparecer todos los archivos como modificados
+# y que los scripts fallen dentro de los contenedores Linux.
+* text=auto eol=lf
+
+# Scripts propios de Windows: se mantienen con CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Archivos binarios: Git no los toca
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.db binary
+*.sqlite binary

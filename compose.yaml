@@ -1,0 +1,115 @@
+# Tienda de Cuentos IA - orquestación de servicios con Docker Compose
+#
+# Uso (desde la carpeta del proyecto):
+#   copy .env.example .env      # una sola vez, y completar las claves
+#   docker compose up -d --build
+#   docker compose ps
+#   docker compose down         # detiene todo SIN borrar datos
+#
+# O con doble clic en iniciar.bat, que hace todo lo anterior.
+#
+# Direcciones:
+#   Desde Windows (navegador): http://localhost:8000/docs | :8501 | :5678
+#   Entre contenedores:        http://api:8000 | http://ui:8501 | http://n8n:5678
+
+name: tienda-cuentos
+
+services:
+
+  # ---------------------------------------------------------------- API
+  # Único servicio con lógica de negocio y ÚNICO que toca SQLite.
+  api:
+    build: .
+    image: tienda-cuentos:local
+    # Un solo proceso: SQLite no tolera bien escrituras desde varios procesos.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+      # Dentro de Docker, "localhost" es el propio contenedor: a n8n se llega por su nombre
+      N8N_WEBHOOK_ENTREGA: http://n8n:5678/webhook/entrega
+      # Ollama corre en Windows, fuera de Docker
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+    volumes:
+      # Base de datos y cuentos .md quedan en la carpeta data/ del proyecto
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      # Permite llegar a Ollama, que corre en Windows fuera de Docker
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      # La imagen python:slim no trae curl: se usa Python para consultar /salud
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/salud', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks: [tienda]
+
+  # ---------------------------------------------------------- Panel web
+  # Solo muestra datos y llama a la API. No monta data/ ni recibe claves.
+  ui:
+    image: tienda-cuentos:local
+    pull_policy: never        # la imagen la construye el servicio api, no se descarga
+    command: streamlit run ui/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true --browser.gatherUsageStats false
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [tienda]
+
+  # -------------------------------------------------------- Automatización
+  n8n:
+    # Versión fija: "latest" puede cambiar de un día para otro y romper los workflows.
+    # 1.121.0 es la mínima que n8n marca como segura. Para subirla, cambiar acá y avisar al grupo.
+    image: docker.n8n.io/n8nio/n8n:1.121.0
+    environment:
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Argentina/Buenos_Aires}
+      TZ: ${GENERIC_TIMEZONE:-America/Argentina/Buenos_Aires}
+      # Cifra las credenciales guardadas en n8n. Si cambia, n8n no puede leerlas.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Falta N8N_ENCRYPTION_KEY en el archivo .env (iniciar.bat la genera sola)}
+      # Para que los workflows lleguen a la API con {{ $env.API_URL }}
+      API_URL: http://api:8000
+    volumes:
+      # Credenciales, workflows activos e historial de ejecuciones
+      - n8n_data:/home/node/.n8n
+      # Workflows exportados del repo, para importarlos con "n8n import:workflow"
+      - ./n8n/workflows:/home/node/workflows
+    ports:
+      - "5678:5678"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [tienda]
+
+  # -------------------------------------------------------------- Relay
+  # Lee los mensajes del bot (long polling) y los reenvía al webhook de n8n.
+  # No expone puertos: nadie se conecta a él, él se conecta a los demás.
+  # Está en el perfil "telegram" para que no se reinicie en bucle mientras
+  # no exista relay/main.py o falte el token del bot. Se levanta con:
+  #   docker compose --profile telegram up -d --build
+  relay:
+    image: tienda-cuentos:local
+    pull_policy: never
+    command: python -m relay.main
+    profiles: ["telegram"]
+    env_file: .env
+    environment:
+      N8N_URL: http://n8n:5678
+    depends_on:
+      - n8n
+    restart: unless-stopped
+    networks: [tienda]
+
+networks:
+  tienda:
+
+volumes:
+  n8n_data:
