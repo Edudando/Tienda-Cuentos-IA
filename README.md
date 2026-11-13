@@ -37,7 +37,9 @@ copy .env.example .env      # Windows
 # cp .env.example .env      # Linux / macOS
 ```
 
-Si no tenés claves todavía, abrí `.env` y dejá `IA_PROVEEDORES=mock`. Con claves, completá `GEMINI_API_KEY` y/o `GROQ_API_KEY` y dejá `IA_PROVEEDORES=gemini,groq,ollama`.
+Si no tenés claves todavía, abrí `.env` y dejá `IA_PROVEEDORES=mock`. También hace falta `N8N_ENCRYPTION_KEY`, una clave que cifra las credenciales de n8n: `iniciar.bat` la genera sola. Si la cargás a mano, puede ser cualquier texto largo, pero **una vez creada no se cambia**. Con claves, completá `GEMINI_API_KEY` y/o `GROQ_API_KEY` y dejá `IA_PROVEEDORES=gemini,groq,ollama`.
+
+**Atajo:** doble clic en `iniciar.bat` hace los pasos 2 a 5 solo (abre Docker, crea el `.env` y la clave de n8n, levanta todo, carga los ejemplos y abre el panel).
 
 **3. Levantar todo.** Ejecutalo dentro de la carpeta del proyecto, donde está `compose.yaml`. Si no, Docker responde *"no configuration file provided"*.
 
@@ -63,7 +65,7 @@ Quedan dos cuentos aprobados: uno gratis y uno de $1.500. Si preferís que quede
 2. Importá los workflows desde la terminal:
 
    ```powershell
-   docker compose exec n8n n8n import:workflow --separate --input=/workflows
+   docker compose exec n8n n8n import:workflow --separate --input=/home/node/workflows
    ```
 
 3. Abrí cada workflow y activalo con el interruptor **Active**. Dentro de n8n la API se llama `http://api:8000`, no `localhost`.
@@ -105,6 +107,8 @@ El panel no tiene lógica de negocio: todo lo decide la API. Si algo falla, el p
 
 - **`port is already allocated`**: otro programa usa el puerto 8000, 8501 o 5678. Cerralo o cambiá el primer número del puerto en `compose.yaml` (por ejemplo `"8001:8000"`).
 - **`env file .env not found`**: falta el paso 2.
+- **`Falta N8N_ENCRYPTION_KEY`**: agregá esa línea al `.env` o usá `iniciar.bat`, que la genera.
+- **n8n no arranca y el log dice `Mismatching encryption keys`**: cambió la clave después de crear la cuenta de n8n. Volvé a poner la anterior o, si la cuenta era solo de prueba, borrá los datos de n8n con `docker volume rm tienda-cuentos_n8n_data` y creala de nuevo.
 - **El panel dice "No se pudo conectar con la API"**: la API todavía arranca o falló. Mirá `docker compose logs api`.
 - **La entrega devuelve 503**: falta `TELEGRAM_BOT_TOKEN`. Es el comportamiento esperado sin bot.
 - **La IA devuelve 503**: no hay claves o se agotó la cuota. Agregá `mock` al final de `IA_PROVEEDORES` para la demo.
@@ -122,6 +126,7 @@ data/             Base SQLite y cuentos .md (no se suben a Git, salvo los ejempl
 tests/            Pruebas automáticas con pytest
 docs/             Arquitectura, bitácora de IA, verificación y responsabilidades
 Dockerfile        Imagen de Python compartida por api, ui y relay
+iniciar.bat       Arranque con doble clic (llama a iniciar.ps1)
 compose.yaml      Levanta todos los servicios con un comando
 .env.example      Plantilla de configuración sin secretos
 ```

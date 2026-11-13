@@ -6,6 +6,8 @@
 #   docker compose ps
 #   docker compose down         # detiene todo SIN borrar datos
 #
+# O con doble clic en iniciar.bat, que hace todo lo anterior.
+#
 # Direcciones:
 #   Desde Windows (navegador): http://localhost:8000/docs | :8501 | :5678
 #   Entre contenedores:        http://api:8000 | http://ui:8501 | http://n8n:5678
@@ -19,12 +21,15 @@ services:
   api:
     build: .
     image: tienda-cuentos:local
-    # SUPUESTO: app/main.py define la variable "app" (Integrante 1).
     # Un solo proceso: SQLite no tolera bien escrituras desde varios procesos.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file: .env
     environment:
       DATA_DIR: /app/data
+      # Dentro de Docker, "localhost" es el propio contenedor: a n8n se llega por su nombre
+      N8N_WEBHOOK_ENTREGA: http://n8n:5678/webhook/entrega
+      # Ollama corre en Windows, fuera de Docker
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
     volumes:
       # Base de datos y cuentos .md quedan en la carpeta data/ del proyecto
       - ./data:/app/data
@@ -47,10 +52,9 @@ services:
   # Solo muestra datos y llama a la API. No monta data/ ni recibe claves.
   ui:
     image: tienda-cuentos:local
-    # SUPUESTO: el archivo principal del panel es ui/app.py.
-    command: streamlit run ui/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+    pull_policy: never        # la imagen la construye el servicio api, no se descarga
+    command: streamlit run ui/app.py --server.address 0.0.0.0 --server.port 8501 --server.headless true --browser.gatherUsageStats false
     environment:
-      # PROPUESTA: nombre de la variable que el panel usa para encontrar la API
       API_URL: http://api:8000
     ports:
       - "8501:8501"
@@ -62,13 +66,16 @@ services:
 
   # -------------------------------------------------------- Automatización
   n8n:
-    # Fijar a la versión con la que el Integrante 3 exportó los workflows
-    # (se consulta con: docker compose exec n8n n8n --version).
-    image: docker.n8n.io/n8nio/n8n:latest
+    # Versión fija: "latest" puede cambiar de un día para otro y romper los workflows.
+    # 1.121.0 es la mínima que n8n marca como segura. Para subirla, cambiar acá y avisar al grupo.
+    image: docker.n8n.io/n8nio/n8n:1.121.0
     environment:
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-America/Argentina/Buenos_Aires}
       TZ: ${GENERIC_TIMEZONE:-America/Argentina/Buenos_Aires}
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Falta N8N_ENCRYPTION_KEY en el archivo .env}
+      # Cifra las credenciales guardadas en n8n. Si cambia, n8n no puede leerlas.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Falta N8N_ENCRYPTION_KEY en el archivo .env (iniciar.bat la genera sola)}
+      # Para que los workflows lleguen a la API con {{ $env.API_URL }}
+      API_URL: http://api:8000
     volumes:
       # Credenciales, workflows activos e historial de ejecuciones
       - n8n_data:/home/node/.n8n
@@ -85,11 +92,17 @@ services:
   # -------------------------------------------------------------- Relay
   # Lee los mensajes del bot (long polling) y los reenvía al webhook de n8n.
   # No expone puertos: nadie se conecta a él, él se conecta a los demás.
+  # Está en el perfil "telegram" para que no se reinicie en bucle mientras
+  # no exista relay/main.py o falte el token del bot. Se levanta con:
+  #   docker compose --profile telegram up -d --build
   relay:
     image: tienda-cuentos:local
-    # SUPUESTO: se ejecuta como módulo (Integrante 3).
+    pull_policy: never
     command: python -m relay.main
+    profiles: ["telegram"]
     env_file: .env
+    environment:
+      N8N_URL: http://n8n:5678
     depends_on:
       - n8n
     restart: unless-stopped

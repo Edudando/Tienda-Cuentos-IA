@@ -41,12 +41,12 @@ flowchart LR
 
 | Contenedor | Adentro (imagen) | Afuera (se monta o se inyecta) |
 |---|---|---|
-| `api` | Python 3.12, dependencias de `requirements.txt`, código de `app/` y `scripts/` | La base SQLite y los cuentos `.md` (carpeta `./data` montada en `/app/data`) y las claves (`.env`) |
+| `api` | Python 3.12, dependencias (incluido pytest), todo el código del repo salvo lo que excluye `.dockerignore`. Corre con un usuario sin permisos de administrador | La base SQLite y los cuentos `.md` (carpeta `./data` montada en `/app/data`) y las claves (`.env`) |
 | `ui` | La misma imagen; ejecuta `ui/app.py` | Solo la variable `API_URL=http://api:8000` |
-| `n8n` | Imagen oficial `n8nio/n8n` | Usuario, credenciales y workflows activos (volumen `n8n_data`); JSON exportados (`./n8n/workflows`, solo lectura) |
+| `n8n` | Imagen oficial `n8nio/n8n` | Usuario, credenciales y workflows activos (volumen `n8n_data`); JSON exportados (`./n8n/workflows`) y la clave `N8N_ENCRYPTION_KEY` que cifra las credenciales |
 | `relay` | La misma imagen; ejecuta `relay/main.py` | Token del bot (`.env`) |
 
-Las claves y los datos nunca quedan dentro de la imagen: el `.dockerignore` excluye `.env` y `data/`. Así la imagen se puede reconstruir o compartir sin exponer secretos, y los datos sobreviven a `docker compose down`.
+Los tres servicios de Python usan la misma imagen (`tienda-cuentos:local`): la construye `api` y `ui` y `relay` la reutilizan, así se compila una sola vez. Las claves y los datos nunca quedan dentro de la imagen: el `.dockerignore` excluye `.env` y `data/`. Así la imagen se puede reconstruir o compartir sin exponer secretos, y los datos sobreviven a `docker compose down`.
 
 ## Cómo se comunican
 
@@ -56,7 +56,7 @@ La única excepción es Ollama, que corre instalado en la PC y no en Docker. La 
 
 ## Orden de arranque y salud
 
-La API tiene un `healthcheck` que consulta `/salud` cada 10 segundos. El panel y n8n esperan a que la API esté **healthy** (`depends_on: condition: service_healthy`) antes de arrancar, así nunca muestran errores de conexión al inicio. Todos los servicios tienen `restart: unless-stopped`: si se caen, Docker los vuelve a levantar.
+La API tiene un `healthcheck` que consulta `/salud` cada 15 segundos. El panel y n8n esperan a que la API esté **healthy** (`depends_on: condition: service_healthy`) antes de arrancar, así nunca muestran errores de conexión al inicio. Todos los servicios tienen `restart: unless-stopped`: si se caen, Docker los vuelve a levantar.
 
 ## El panel no tiene lógica de negocio
 

@@ -43,6 +43,21 @@ if (-not (Test-Path ".env")) {
     Write-Host "Cree el archivo .env a partir de .env.example. Revisalo si queres usar IA real o Telegram." -ForegroundColor Yellow
 }
 
+# Clave de cifrado de n8n: compose.yaml la exige. Si falta, se genera una al azar.
+# IMPORTANTE: una vez creada no se cambia, o n8n no puede leer sus credenciales.
+$rutaEnv = Join-Path $PSScriptRoot ".env"
+$textoEnv = [IO.File]::ReadAllText($rutaEnv)
+if ($textoEnv -notmatch '(?m)^N8N_ENCRYPTION_KEY=\S+') {
+    $clave = -join (1..32 | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+    if ($textoEnv -match '(?m)^N8N_ENCRYPTION_KEY=[ \t]*\r?$') {
+        $textoEnv = $textoEnv -replace '(?m)^N8N_ENCRYPTION_KEY=[ \t]*(\r?)$', "N8N_ENCRYPTION_KEY=$clave`$1"
+    } else {
+        $textoEnv = $textoEnv.TrimEnd() + "`r`nN8N_ENCRYPTION_KEY=$clave`r`n"
+    }
+    [IO.File]::WriteAllText($rutaEnv, $textoEnv, (New-Object Text.UTF8Encoding $false))
+    Write-Host "Genere N8N_ENCRYPTION_KEY en .env (no la cambies despues)." -ForegroundColor Yellow
+}
+
 # 3. Levantar los servicios
 Paso "Levantando API, panel y n8n..."
 docker compose up -d --build
