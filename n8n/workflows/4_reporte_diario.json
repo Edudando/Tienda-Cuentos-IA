@@ -1,0 +1,163 @@
+{
+  "name": "4 · Reporte diario",
+  "id": "TiendaCuentosWf04",
+  "versionId": "0c58e092-349b-51d9-a51c-04fbb164573a",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 20
+            }
+          ]
+        }
+      },
+      "id": "71333ae4-755e-5a1d-b18e-3e0ecd697f92",
+      "name": "Todos los días 20:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.API_URL }}/estadisticas",
+        "options": {}
+      },
+      "id": "0edfa502-9d7d-5971-bc34-24134a462e77",
+      "name": "Estadísticas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "585e55f7-63a1-592c-acf1-ef88c0aa240b",
+              "leftValue": "={{ $json.hay_pendientes }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "09905c7a-4500-57c5-8b44-8648871a4675",
+      "name": "¿Hay tareas pendientes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "notes": "Cuentos por revisar o pagos por validar",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.ADMIN_CHAT_ID, text: '📊 Reporte diario\\n\\n⚠️ Pendiente: ' + $json.pendientes_revision + ' cuentos para revisar y ' + $json.pagos_por_validar + ' pagos para validar.\\n\\n' + 'Cuentos publicados: ' + ($json.productos.publicado || 0) + '\\nPedidos entregados: ' + $json.entregados + '\\nConsultas por reglas: ' + ($json.consultas_por_origen.regla || 0) + ' · por IA: ' + ($json.consultas_por_origen.ia || 0) }) }}"
+      },
+      "id": "839b702f-c09d-5c00-8bfa-57be580c3ad4",
+      "name": "Reporte con pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.ADMIN_CHAT_ID, text: '📊 Reporte diario\\n\\n✅ No hay tareas pendientes.\\n\\n' + 'Cuentos publicados: ' + ($json.productos.publicado || 0) + '\\nPedidos entregados: ' + $json.entregados + '\\nConsultas por reglas: ' + ($json.consultas_por_origen.regla || 0) + ' · por IA: ' + ($json.consultas_por_origen.ia || 0) }) }}"
+      },
+      "id": "8df9c43a-4883-50a1-bf98-1b676d9f07a6",
+      "name": "Reporte sin pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Todos los días 20:00": {
+      "main": [
+        [
+          {
+            "node": "Estadísticas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Estadísticas": {
+      "main": [
+        [
+          {
+            "node": "¿Hay tareas pendientes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay tareas pendientes?": {
+      "main": [
+        [
+          {
+            "node": "Reporte con pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reporte sin pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

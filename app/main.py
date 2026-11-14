@@ -28,6 +28,8 @@ from app.modelos import (
 from app.servicios import consultas, pedidos, productos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# httpx anota cada URL que pide, y las de Telegram llevan el token del bot: no las mostramos
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
