@@ -76,6 +76,9 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Falta N8N_ENCRYPTION_KEY en el archivo .env (iniciar.bat la genera sola)}
       # Para que los workflows lleguen a la API con {{ $env.API_URL }}
       API_URL: http://api:8000
+      # Los workflows leen el token, el canal y ADMIN_CHAT_ID del .env con {{ $env.NOMBRE }}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    env_file: .env
     volumes:
       # Credenciales, workflows activos e historial de ejecuciones
       - n8n_data:/home/node/.n8n

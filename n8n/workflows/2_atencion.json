@@ -1,0 +1,583 @@
+{
+  "name": "2 · Atención del bot",
+  "id": "TiendaCuentosWf02",
+  "versionId": "45e4511e-9fe2-5107-830f-8317ff0e52e8",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telegram",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "adcf359a-31a1-5b7e-8f40-a65e811b2d69",
+      "name": "Mensaje del relay",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "webhookId": "0654c154-20fb-5077-ad8b-f313b822654d"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bbd7a527-fd66-56bd-8a9e-0ce9cee5f010",
+              "leftValue": "={{ $json.body.tipo }}",
+              "rightValue": "foto",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "7be01db8-164f-5a8a-965a-dfcf9d690248",
+      "name": "¿Es una foto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        400
+      ],
+      "notes": "Una foto se toma como comprobante de pago",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_URL }}/pedidos/comprobante",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Mensaje del relay').item.json.body.chat_id, file_id: $('Mensaje del relay').item.json.body.file_id }) }}"
+      },
+      "id": "c90bb2ee-6132-5f8a-9c57-425ddbd32241",
+      "name": "Registrar comprobante",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2a265608-e465-54b9-b724-f166aa8bbec1",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 300,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f6c6bfa8-ba9c-57ed-a8f1-57fe5b271f89",
+      "name": "¿Había un pedido esperando pago?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.body.chat_id, text: '¡Gracias! Recibimos tu comprobante del pedido N° ' + $json.body.id + '. Una persona lo va a revisar y te mandamos el cuento enseguida.' }) }}"
+      },
+      "id": "7f926fb5-4923-5e34-9664-ad85af4d366a",
+      "name": "Avisar al cliente: comprobante recibido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.ADMIN_CHAT_ID, text: '🧾 Nuevo comprobante del pedido N° ' + $('Registrar comprobante').item.json.body.id + ' (' + $('Registrar comprobante').item.json.body.producto_titulo + ', $' + $('Registrar comprobante').item.json.body.precio.toLocaleString('es-AR') + '). Validalo en el panel: Pedidos y pagos.' }) }}"
+      },
+      "id": "cce13482-4b02-541d-b50f-cf286a94bc66",
+      "name": "Avisar al admin: comprobante para validar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Mensaje del relay').item.json.body.chat_id, text: 'No encontramos un pedido esperando pago. Si querés un cuento, escribí /catalogo.' }) }}"
+      },
+      "id": "1ab1f74b-6838-57a6-bd37-34ac47e8cdf5",
+      "name": "Responder: no hay pedido para esa foto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f3de65b1-7815-5f0b-8d38-43d0fa182de9",
+              "leftValue": "={{ $json.body.tipo }}",
+              "rightValue": "texto",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "7a6a3471-626f-5533-876e-c7f3d07c16c7",
+      "name": "¿Es texto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        460,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.body.chat_id, text: 'Por ahora entiendo mensajes de texto y fotos de comprobantes. Escribí /catalogo para ver los cuentos.' }) }}"
+      },
+      "id": "85d797b9-7812-534b-9731-2923fbb58166",
+      "name": "Responder: solo texto o fotos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_URL }}/consultas",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.body.chat_id, usuario: $json.body.usuario, texto: $json.body.texto }) }}"
+      },
+      "id": "47bb28e1-64e8-547e-b6e9-17cdf0242c0c",
+      "name": "Clasificar el mensaje",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        520
+      ],
+      "notes": "Reglas primero; si no alcanzan, la IA. El código valida lo que propone la IA",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Mensaje del relay').item.json.body.chat_id, text: $json.respuesta }) }}"
+      },
+      "id": "c4b6d076-1070-5174-8ba7-703c4deca443",
+      "name": "Responder al cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d50ace96-c09c-55cf-a4be-087532d00db5",
+              "leftValue": "={{ $('Clasificar el mensaje').item.json.intencion }}",
+              "rightValue": "pedido",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "c654b794-3bd8-5526-8b12-60ddfcfa8411",
+      "name": "¿Es un pedido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_URL }}/pedidos",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ producto_id: $('Clasificar el mensaje').item.json.producto_id, chat_id: $('Mensaje del relay').item.json.body.chat_id, usuario: $('Mensaje del relay').item.json.body.usuario }) }}"
+      },
+      "id": "b3b0dfcf-c5de-575d-bccc-748e8ae9368d",
+      "name": "Crear pedido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f800a22d-3146-5d53-b4f1-577898a5f424",
+              "leftValue": "={{ $json.es_gratis }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "e8ea9877-b8f1-516d-b84f-1f2561eff7a4",
+      "name": "¿Es gratis?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1560,
+        440
+      ],
+      "notes": "es_gratis lo calcula la API",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/entrega",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ pedido_id: $json.id }) }}"
+      },
+      "id": "36721251-6e12-5c84-a4bb-86ee325145d8",
+      "name": "Disparar entrega (workflow 3)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        360
+      ],
+      "notes": "Llama al workflow de Entrega por su webhook",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.API_URL }}/pedidos/{{ $json.id }}/estado",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ estado: \"esperando_pago\" }) }}"
+      },
+      "id": "cd9f36ce-17ac-5f49-8ac6-808c282165d0",
+      "name": "Pasar a esperando pago",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        540
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $('Crear pedido').item.json.chat_id, text: $('Crear pedido').item.json.instrucciones_pago }) }}"
+      },
+      "id": "d1fbbc98-e100-5bfc-ad31-409f08d1b741",
+      "name": "Mandar datos de transferencia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        540
+      ]
+    }
+  ],
+  "connections": {
+    "Mensaje del relay": {
+      "main": [
+        [
+          {
+            "node": "¿Es una foto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es una foto?": {
+      "main": [
+        [
+          {
+            "node": "Registrar comprobante",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Es texto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar comprobante": {
+      "main": [
+        [
+          {
+            "node": "¿Había un pedido esperando pago?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Había un pedido esperando pago?": {
+      "main": [
+        [
+          {
+            "node": "Avisar al cliente: comprobante recibido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder: no hay pedido para esa foto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar al cliente: comprobante recibido": {
+      "main": [
+        [
+          {
+            "node": "Avisar al admin: comprobante para validar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es texto?": {
+      "main": [
+        [
+          {
+            "node": "Clasificar el mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder: solo texto o fotos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clasificar el mensaje": {
+      "main": [
+        [
+          {
+            "node": "Responder al cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder al cliente": {
+      "main": [
+        [
+          {
+            "node": "¿Es un pedido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es un pedido?": {
+      "main": [
+        [
+          {
+            "node": "Crear pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear pedido": {
+      "main": [
+        [
+          {
+            "node": "¿Es gratis?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es gratis?": {
+      "main": [
+        [
+          {
+            "node": "Disparar entrega (workflow 3)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pasar a esperando pago",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pasar a esperando pago": {
+      "main": [
+        [
+          {
+            "node": "Mandar datos de transferencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

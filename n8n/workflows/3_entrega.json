@@ -1,0 +1,265 @@
+{
+  "name": "3 · Entrega del cuento",
+  "id": "TiendaCuentosWf03",
+  "versionId": "ba466836-27d8-5a78-bf48-c283264a77b4",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "entrega",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "859d1c72-78db-5b6c-bd65-2e30e041c278",
+      "name": "Pedido para entregar",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "4879298e-35e1-53ba-98d4-1f5d89c0c531"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.API_URL }}/pedidos/{{ $json.body.pedido_id }}",
+        "options": {}
+      },
+      "id": "ce653ca5-c15e-51c7-be02-919166077686",
+      "name": "Buscar pedido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b553c6cb-e676-51a0-999d-e6db923086df",
+              "leftValue": "={{ $json.puede_entregar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "74657359-c085-5374-a1a6-79def56725fa",
+      "name": "¿Puede entregarse?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "notes": "Gratis, o pago validado por una persona",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_URL }}/pedidos/{{ $json.id }}/entregar",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "8f2a68c1-0105-5028-9821-051bb74040d1",
+      "name": "Enviar el .md por Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        200
+      ],
+      "notes": "La API vuelve a controlar el pago (409 si no está pago)",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1abce357-f1f3-552e-bd24-e834cb6025d2",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 300,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "6cc058bd-1d9a-5b2d-ae52-3b35cf284183",
+      "name": "¿Se entregó?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.ADMIN_CHAT_ID, text: '✅ Pedido N° ' + $('Buscar pedido').item.json.id + ' entregado: ' + $('Buscar pedido').item.json.producto_titulo + ' a ' + ($('Buscar pedido').item.json.usuario || $('Buscar pedido').item.json.chat_id) }) }}"
+      },
+      "id": "652cc975-0555-51fa-93fb-dd32549c2d2c",
+      "name": "Avisar al admin: entregado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.ADMIN_CHAT_ID, text: '❌ No se pudo entregar el pedido N° ' + $('Buscar pedido').item.json.id + ': ' + ($json.body.detalle || $json.statusCode) + '. Entregalo a mano desde el panel.' }) }}"
+      },
+      "id": "e4df7606-e001-5543-9a8e-a075b961e900",
+      "name": "Avisar al admin: falló la entrega",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $env.ADMIN_CHAT_ID, text: '⛔ Se pidió entregar el pedido N° ' + $json.id + ' pero no está pago. No se envió nada.' }) }}"
+      },
+      "id": "d678d3ab-1a26-58ae-9493-5426122caac7",
+      "name": "Avisar al admin: pedido sin pagar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Pedido para entregar": {
+      "main": [
+        [
+          {
+            "node": "Buscar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar pedido": {
+      "main": [
+        [
+          {
+            "node": "¿Puede entregarse?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Puede entregarse?": {
+      "main": [
+        [
+          {
+            "node": "Enviar el .md por Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisar al admin: pedido sin pagar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar el .md por Telegram": {
+      "main": [
+        [
+          {
+            "node": "¿Se entregó?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se entregó?": {
+      "main": [
+        [
+          {
+            "node": "Avisar al admin: entregado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisar al admin: falló la entrega",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}
