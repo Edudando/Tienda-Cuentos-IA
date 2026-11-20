@@ -196,7 +196,11 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("Supervisión humana")
     st.caption("Nada se publica sin esta aprobación. Si editás un cuento, se vuelve a validar y queda pendiente.")
-    filtro = st.radio("Mostrar", ["pendiente", "rechazado"], horizontal=True, format_func=ETIQUETA_ESTADO.get)
+    col_filtro, col_boton = st.columns([4, 1])
+    filtro = col_filtro.radio("Mostrar", ["pendiente", "rechazado"], horizontal=True, format_func=ETIQUETA_ESTADO.get)
+    # El panel no se actualiza solo: este botón trae los encargos nuevos sin apretar F5
+    if col_boton.button("🔄 Actualizar", key="refrescar_revision"):
+        st.rerun()
     lista = llamar(api.productos, filtro) or []
     if not lista:
         st.info(f"No hay cuentos en estado '{filtro}'.")
