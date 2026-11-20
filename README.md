@@ -91,6 +91,17 @@ Para saber tu `ADMIN_CHAT_ID`, mandale cualquier mensaje al bot y abrí `https:/
 
 El panel no tiene lógica de negocio: todo lo decide la API. Si algo falla, el panel muestra el código y el motivo (`404 · No existe`, `409 · No corresponde al estado actual`, `422 · Datos inválidos`, `503 · Servicio externo no disponible`).
 
+## Encargos de los clientes
+
+Un cliente puede pedirle al bot un cuento nuevo, por ejemplo: *"quiero que me escriban un cuento sobre un dinosaurio que aprende a nadar, para 5 años"*.
+
+1. El bot detecta la intención `encargo` con el tema y la edad. Si falta alguno de los dos, lo pide.
+2. El cliente recibe la confirmación al instante y la IA escribe el cuento en segundo plano.
+3. El cuento queda **pendiente** en la pestaña Revisión, marcado como **🙋 Encargado por @usuario**.
+4. Al aprobarlo o rechazarlo, el cliente recibe un aviso por Telegram. Cuando n8n lo publica en el canal, le llega el link para pedirlo.
+
+Cada cliente puede tener un solo encargo esperando revisión, para cuidar la cuota de la IA. Desde el panel (pestaña Consultas → "Probar un mensaje") se puede probar sin Telegram.
+
 ## Comandos útiles
 
 | Acción | Comando |

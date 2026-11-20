@@ -52,6 +52,17 @@ def precio_texto(precio: float) -> str:
     return "Gratis" if not precio else f"${precio:,.0f}".replace(",", ".")
 
 
+def encargado_por(p: dict) -> str | None:
+    """'@usuario' si el cuento lo encargó un cliente por el bot; None si lo generó el panel."""
+    if not p.get("solicitante_chat_id"):
+        return None
+    usuario = (p.get("solicitante_usuario") or "").strip()
+    if not usuario:
+        return "un cliente sin nombre de usuario"
+    # El relay manda el @usuario de Telegram, o el nombre si la persona no tiene usuario
+    return usuario if " " in usuario else "@" + usuario.lstrip("@")
+
+
 def mostrar_validaciones(validaciones: list[dict]) -> None:
     if not validaciones:
         st.caption("Sin validaciones registradas.")
@@ -191,8 +202,14 @@ with tabs[2]:
         st.info(f"No hay cuentos en estado '{filtro}'.")
     for p in lista:
         bloqueado = not p["aprobable"]
+        solicitante = encargado_por(p)
         titulo = f"N° {p['id']} · {p['titulo']} · {p['edad']} años · {precio_texto(p['precio'])}"
+        if solicitante:
+            titulo += f" · 🙋 Encargado por {solicitante}"
         with st.expander(("⛔ " if bloqueado else "") + titulo, expanded=len(lista) == 1):
+            if solicitante:
+                st.info(f"🙋 **Encargado por {solicitante}** por el bot. Al aprobarlo o rechazarlo se le avisa "
+                        "por Telegram, y cuando n8n lo publique recibe el link para pedirlo.")
             izq, der = st.columns(2)
             with izq:
                 st.markdown("##### ⚙️ Validaciones por reglas (código)")
@@ -252,6 +269,8 @@ with tabs[3]:
                     st.markdown(f"**N° {p['id']} · {p['titulo']}**  \n"
                                 f"{p['edad']} años · {precio_texto(p['precio'])} · tema: {p['tema']}")
                     st.caption(p.get("promo") or "")
+                    if solicitante := encargado_por(p):
+                        st.markdown(f"🙋 Encargado por {solicitante}")
                     if p.get("link_pedido"):
                         st.markdown(f"🔗 Link de pedido: {p['link_pedido']}")
                 with der:
@@ -327,6 +346,9 @@ with tabs[5]:
                 st.markdown(f"**Intención:** {r['intencion']} · **Origen:** {r['origen']} · "
                             f"**Proveedor:** {r.get('proveedor_ia') or '—'}")
                 st.info(r["respuesta"])
+                if r.get("encargo"):
+                    st.success("Es un encargo: la IA lo está escribiendo en segundo plano. En un minuto aparece "
+                               "en la pestaña Revisión como «Encargado por @prueba-panel».")
 
     historial = llamar(api.consultas, 200) or []
     if historial:

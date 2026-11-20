@@ -9,6 +9,7 @@ from app import db, ia
 from app.config import config
 from app.errores import EstadoInvalido, NoEncontrado, ValidacionFallida
 from app.modelos import EditarProducto, GenerarCuento
+from app.servicios.avisos import avisar_cliente
 from app.validaciones import (
     extraer_titulo,
     hay_bloqueos,
@@ -60,8 +61,16 @@ def _guardar_archivo(producto_id: int, titulo: str, contenido: str) -> str:
     return nombre
 
 
-def generar(datos: GenerarCuento) -> dict[str, Any]:
-    """IA escribe el cuento -> reglas lo validan -> si falla, un reintento con feedback."""
+def generar(
+    datos: GenerarCuento,
+    solicitante_chat_id: str | None = None,
+    solicitante_usuario: str | None = None,
+) -> dict[str, Any]:
+    """IA escribe el cuento -> reglas lo validan -> si falla, un reintento con feedback.
+
+    Si lo encargó un cliente por el bot, se guarda quién fue para avisarle
+    cuando una persona lo apruebe y cuando se publique.
+    """
     contexto = datos.model_dump()
     correcciones: list[str] = []
     for _ in range(MAX_INTENTOS):
@@ -101,6 +110,8 @@ def generar(datos: GenerarCuento) -> dict[str, Any]:
             "estado": "pendiente",
             "validaciones": validaciones,
             "proveedor_ia": respuesta.proveedor,
+            "solicitante_chat_id": solicitante_chat_id,
+            "solicitante_usuario": solicitante_usuario,
         }
     )
     archivo = _guardar_archivo(producto_id, titulo, contenido)
@@ -163,7 +174,24 @@ def revisar(producto_id: int, decision: str, nota: str | None) -> dict[str, Any]
         raise ValidacionFallida("No se puede aprobar, fallan reglas: " + "; ".join(fallas))
     nuevo_estado = "aprobado" if decision == "aprobar" else "rechazado"
     db.actualizar_producto(producto_id, {"estado": nuevo_estado, "nota_revision": nota})
+    if producto.get("solicitante_chat_id"):
+        _avisar_revision(producto, nuevo_estado)
     return obtener(producto_id)
+
+
+def _avisar_revision(producto: dict[str, Any], nuevo_estado: str) -> None:
+    """Le cuenta al cliente que encargó el cuento qué decidió la persona que lo revisó."""
+    if nuevo_estado == "aprobado":
+        texto = (
+            f"¡Buenas noticias! 🎉 El cuento que nos pediste, \"{producto['titulo']}\", ya fue revisado "
+            "y aprobado. En unos minutos lo publicamos en el canal y te aviso para que lo pidas."
+        )
+    else:
+        texto = (
+            f"Lo sentimos: el cuento sobre \"{producto['tema']}\" que nos pediste no pasó nuestra revisión. "
+            "Si querés, pedinos otro tema y lo escribimos."
+        )
+    avisar_cliente(producto["solicitante_chat_id"], texto)
 
 
 def marcar_publicado(producto_id: int, telegram_msg_id: int | None) -> dict[str, Any]:
@@ -171,7 +199,14 @@ def marcar_publicado(producto_id: int, telegram_msg_id: int | None) -> dict[str,
     if producto["estado"] != "aprobado":
         raise EstadoInvalido(f"Solo se publica lo aprobado (estado actual: {producto['estado']})")
     db.actualizar_producto(producto_id, {"estado": "publicado", "telegram_msg_id": telegram_msg_id})
-    return obtener(producto_id)
+    publicado = obtener(producto_id)
+    if publicado.get("solicitante_chat_id"):
+        como_pedirlo = publicado["link_pedido"] or f"escribí: quiero el N° {producto_id}"
+        avisar_cliente(
+            publicado["solicitante_chat_id"],
+            f"📚 Tu cuento \"{publicado['titulo']}\" ya está publicado. Para pedirlo: {como_pedirlo}",
+        )
+    return publicado
 
 
 def leer_archivo(producto_id: int) -> tuple[str, bytes]:

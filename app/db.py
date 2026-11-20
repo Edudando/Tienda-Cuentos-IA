@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS productos (
     proveedor_ia    TEXT,
     nota_revision   TEXT,
     telegram_msg_id INTEGER,
+    solicitante_chat_id TEXT,                           -- encargos: chat del cliente que lo pidió
+    solicitante_usuario TEXT,                           -- encargos: @usuario o nombre del cliente
     creado          TEXT NOT NULL,
     actualizado     TEXT NOT NULL
 );
@@ -82,10 +84,22 @@ def conexion() -> Iterator[sqlite3.Connection]:
         con.close()
 
 
+# Columnas agregadas después de la primera versión. CREATE TABLE IF NOT EXISTS no
+# modifica una tabla que ya existe, así que en una base vieja se agregan con ALTER TABLE.
+COLUMNAS_NUEVAS = {
+    "productos": {"solicitante_chat_id": "TEXT", "solicitante_usuario": "TEXT"},
+}
+
+
 def inicializar() -> None:
     config.cuentos_dir.mkdir(parents=True, exist_ok=True)
     with conexion() as con:
         con.executescript(ESQUEMA)
+        for tabla, columnas in COLUMNAS_NUEVAS.items():
+            existentes = {f["name"] for f in con.execute(f"PRAGMA table_info({tabla})")}
+            for columna, tipo in columnas.items():
+                if columna not in existentes:
+                    con.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
 
 
 def _a_dict(fila: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -120,6 +134,16 @@ def listar_productos(estado: str | None = None) -> list[dict[str, Any]]:
         sql, params = sql + " WHERE estado = ?", (estado,)
     with conexion() as con:
         return [_a_dict(f) for f in con.execute(sql + " ORDER BY id DESC", params).fetchall()]
+
+
+def contar_encargos_pendientes(chat_id: str) -> int:
+    """Encargos del cliente que todavía esperan la revisión humana."""
+    with conexion() as con:
+        fila = con.execute(
+            "SELECT COUNT(*) AS n FROM productos WHERE solicitante_chat_id = ? AND estado = 'pendiente'",
+            (chat_id,),
+        ).fetchone()
+    return int(fila["n"])
 
 
 def actualizar_producto(producto_id: int, cambios: dict[str, Any]) -> None:

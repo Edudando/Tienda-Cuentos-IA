@@ -119,6 +119,19 @@ def _mock(prompt: str, sistema: str, json_mode: bool, tarea: str, contexto: dict
         )
     if tarea == "clasificar":
         texto = contexto.get("texto", "").lower()
+        if any(p in texto for p in ("escrib", "encarg", "invent", "cuento nuevo", "nuevo cuento")):
+            tema = re.search(r"(?:sobre|de)\s+(.+?)(?:,?\s+para\s+\d+|$)", texto)
+            edad = re.search(r"(\d+)\s*años", texto)
+            return json.dumps(
+                {
+                    "intencion": "encargo",
+                    "producto_id": None,
+                    "tema": tema.group(1).strip(" .,") if tema else None,
+                    "edad": int(edad.group(1)) if edad else None,
+                    "respuesta": "¡Te lo escribimos!",
+                },
+                ensure_ascii=False,
+            )
         quiere = any(p in texto for p in ("quiero", "comprar", "pedir", "lo llevo", "me lo"))
         catalogo = contexto.get("catalogo", [])
         producto_id = catalogo[0]["id"] if (quiere and catalogo) else None

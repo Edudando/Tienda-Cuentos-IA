@@ -13,13 +13,31 @@ from typing import Any
 
 from app import db, ia
 from app.errores import ServicioNoDisponible
+from app.servicios import encargos
+
+INTENCIONES = {"consulta", "pedido", "encargo", "otro"}
 
 SISTEMA_ATENCION = (
     "Sos el asistente de una tienda de cuentos infantiles en Telegram. Respondés en "
     "español rioplatense, en no más de 3 oraciones, con amabilidad. Solo hablás de los "
-    "cuentos del catálogo. Si el cliente quiere uno, la intención es 'pedido'. "
-    "Respondés SOLO un JSON con las claves: intencion ('consulta', 'pedido' u 'otro'), "
-    "producto_id (número del catálogo o null) y respuesta (texto para el cliente)."
+    "cuentos del catálogo. Si el cliente quiere uno del catálogo, la intención es 'pedido'. "
+    "Si el cliente pide que le escriban un cuento NUEVO sobre un tema, la intención es "
+    "'encargo': en 'tema' poné de qué trata en pocas palabras (máximo 80 caracteres) y en "
+    "'edad' la edad del chico (número de 3 a 12, o null si no la dijo). "
+    "Respondés SOLO un JSON con las claves: intencion ('consulta', 'pedido', 'encargo' u 'otro'), "
+    "producto_id (número del catálogo o null), tema (texto o null), edad (número o null) "
+    "y respuesta (texto para el cliente)."
+)
+
+RESPUESTA_ENCARGO_INCOMPLETO = (
+    "¡Te escribimos un cuento nuevo! Contame en un solo mensaje de qué querés que trate y "
+    "para qué edad (de 3 a 12 años). Por ejemplo: «quiero un cuento sobre un dinosaurio "
+    "que aprende a nadar, para 5 años»."
+)
+
+RESPUESTA_ENCARGO_REPETIDO = (
+    "Ya tenés un cuento encargado que estamos revisando. Cuando esté listo te aviso por "
+    "acá y después podés pedirnos otro."
 )
 
 RESPUESTA_SIN_IA = (
@@ -84,7 +102,18 @@ def _por_ia(texto: str, catalogo: list[dict[str, Any]]) -> tuple[dict[str, Any],
 
 def _validar_propuesta_ia(datos: dict[str, Any], catalogo: list[dict[str, Any]]) -> dict[str, Any]:
     """El código no confía ciegamente en la IA."""
-    intencion = datos.get("intencion") if datos.get("intencion") in {"consulta", "pedido", "otro"} else "otro"
+    intencion = datos.get("intencion") if datos.get("intencion") in INTENCIONES else "otro"
+    if intencion == "encargo":
+        cuento = encargos.validar_datos(datos.get("tema"), datos.get("edad"))
+        if cuento is None:
+            # Falta el tema o la edad (o están fuera de rango): se piden de nuevo
+            return {"intencion": "consulta", "producto_id": None, "respuesta": RESPUESTA_ENCARGO_INCOMPLETO}
+        return {
+            "intencion": "encargo",
+            "producto_id": None,
+            "respuesta": "",
+            "encargo": {"tema": cuento.tema, "edad": cuento.edad},
+        }
     respuesta = str(datos.get("respuesta") or "").strip()[:1000] or RESPUESTA_SIN_IA
     producto_id = datos.get("producto_id")
     ids = {c["id"] for c in catalogo}
@@ -120,6 +149,9 @@ def atender(chat_id: str, usuario: str | None, texto: str) -> dict[str, Any]:
             resultado = {"intencion": "otro", "producto_id": None, "respuesta": RESPUESTA_SIN_IA}
             origen, proveedor = "regla", "sin_ia"
 
+    if resultado["intencion"] == "encargo":
+        resultado = _aceptar_encargo(chat_id, resultado)
+
     consulta_id = db.insertar_consulta(
         {
             "chat_id": chat_id,
@@ -133,6 +165,20 @@ def atender(chat_id: str, usuario: str | None, texto: str) -> dict[str, Any]:
         }
     )
     return {"consulta_id": consulta_id, **resultado, "origen": origen, "proveedor_ia": proveedor}
+
+
+def _aceptar_encargo(chat_id: str, resultado: dict[str, Any]) -> dict[str, Any]:
+    """Reserva el encargo. La generación la dispara main.py en segundo plano."""
+    if not encargos.reservar(chat_id):
+        return {"intencion": "consulta", "producto_id": None, "respuesta": RESPUESTA_ENCARGO_REPETIDO}
+    datos = resultado["encargo"]
+    return {
+        **resultado,
+        "respuesta": (
+            f"¡Gracias! Vamos a escribir un cuento sobre {datos['tema']} para chicos de {datos['edad']} "
+            "años. Antes de publicarlo lo revisa una persona, y te aviso por acá cuando esté aprobado."
+        ),
+    }
 
 
 def listar(limite: int = 100) -> list[dict[str, Any]]:

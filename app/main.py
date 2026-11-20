@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Query, Request, Response, status
+from fastapi import BackgroundTasks, FastAPI, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app import db
@@ -25,7 +25,7 @@ from app.modelos import (
     Revision,
     ValidacionPago,
 )
-from app.servicios import consultas, pedidos, productos
+from app.servicios import consultas, encargos, pedidos, productos
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 # httpx anota cada URL que pide, y las de Telegram llevan el token del bot: no las mostramos
@@ -113,9 +113,18 @@ def descargar_archivo(producto_id: int) -> Response:
 
 # ---------------------------------------------------------------- consultas
 @app.post("/consultas", tags=["atención"])
-def nueva_consulta(datos: NuevaConsulta) -> dict:
-    """Clasifica el mensaje (reglas + IA) y devuelve la respuesta sugerida y la intención."""
-    return consultas.atender(datos.chat_id, datos.usuario, datos.texto)
+def nueva_consulta(datos: NuevaConsulta, segundo_plano: BackgroundTasks) -> dict:
+    """Clasifica el mensaje (reglas + IA) y devuelve la respuesta sugerida y la intención.
+
+    Si es un encargo, el cliente recibe la confirmación enseguida y el cuento se
+    escribe en segundo plano: queda pendiente en Revisión con el nombre de quien lo pidió.
+    """
+    resultado = consultas.atender(datos.chat_id, datos.usuario, datos.texto)
+    if resultado.get("encargo"):
+        segundo_plano.add_task(
+            encargos.procesar, datos.chat_id, datos.usuario, resultado["encargo"]["tema"], resultado["encargo"]["edad"]
+        )
+    return resultado
 
 
 @app.get("/consultas", tags=["atención"])
